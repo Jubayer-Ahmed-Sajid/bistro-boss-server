@@ -28,35 +28,47 @@ async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
         // await client.connect();
+        const usersCollection = client.db("bistroDb").collection('users');
         const MenuCollection = client.db("bistroDb").collection('menu');
         const ReviewsCollection = client.db("bistroDb").collection('reviews');
         const cartCollection = client.db("bistroDb").collection('carts');
 
-        app.get('/menu', async(req,res)=>{
+        app.get('/menu', async (req, res) => {
             const result = await MenuCollection.find().toArray()
             res.send(result)
         })
-        app.get('/reviews', async(req,res)=>{
-            const result =await ReviewsCollection.find().toArray()
+        app.get('/reviews', async (req, res) => {
+            const result = await ReviewsCollection.find().toArray()
             res.send(result)
         })
-        app.post('/carts', async(req,res)=> {
+        app.post('/carts', async (req, res) => {
             const cartItem = req.body
             const result = await cartCollection.insertOne(cartItem)
             res.send(result)
         })
-        app.get('/carts', async(req,res)=>{
+        app.get('/carts', async (req, res) => {
             const email = req.query
             console.log(email)
             const result = await cartCollection.find(email).toArray()
             res.send(result)
         })
-        app.delete('/carts/:id', async(req,res)=>{
+        app.delete('/carts/:id', async (req, res) => {
             const id = req.params.id
-            const query = {_id: new ObjectId(id)}
+            const query = { _id: new ObjectId(id) }
             const result = await cartCollection.deleteOne(query)
             res.send(result)
         })
+        app.post('/users', async (req, res) => {
+            const user = req.body;
+            const query = { email: user.email }
+            const existingEmail = await usersCollection.findOne(query)
+            if (existingEmail) {
+                return res.send({message: 'User already exits', insertedId: null})
+            }
+            const result = await usersCollection.insertOne(user)
+            res.send(result)
+        })
+
         // Send a ping to confirm a successful connection
         await client.db("admin").command({ ping: 1 });
         console.log("Pinged your deployment. You successfully connected to MongoDB!");
