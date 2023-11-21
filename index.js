@@ -1,6 +1,7 @@
 const express = require('express')
 const cors = require('cors')
 const jwt = require('jsonwebtoken');
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express()
 require('dotenv').config()
 const port = process.env.PORT || 5000;
@@ -35,7 +36,6 @@ app.post('/jwt', async (req, res) => {
 
     res.send({ token })
 })
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.vqva6ft.mongodb.net/?retryWrites=true&w=majority`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -76,6 +76,45 @@ async function run() {
             const result = await MenuCollection.insertOne(item)
             res.send(result)
         })
+        
+        app.delete('/menu/:id',verifyToken, verifyAdmin,async(req,res)=>{
+            const id = req.params.id;
+            const query ={_id: id}
+            const result = await MenuCollection.deleteOne(query)
+            res.send(result)
+        })
+        app.patch('/menu/:id',verifyToken, verifyAdmin,async(req,res)=>{
+            const id = req.params.id;
+            const item = req.body
+            const query ={_id: id}
+            const updatedDoc = {
+                $set:{
+                    name: item.name,
+                    image:item.image,
+                    category: item.category,
+                    recipe: item.recipe,
+                    price:parseFloat(item.price)
+                }
+            }
+            const result = await MenuCollection.updateOne(query,updatedDoc)
+            res.send(result)
+        })
+    
+        app.get('/menu/:id',async(req,res)=>{
+            const id = req.params.id;
+            const query ={_id: id}
+            const result = await MenuCollection.findOne(query)
+            res.send(result)
+        })
+    
+        app.delete('/menu/:id',verifyToken, verifyAdmin,async(req,res)=>{
+            const id = req.params.id;
+            const query ={_id: id}
+            const result = await MenuCollection.deleteOne(query)
+            res.send(result)
+        })
+    
+        
         app.get('/reviews', async (req, res) => {
             const result = await ReviewsCollection.find().toArray()
             res.send(result)
