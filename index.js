@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express()
 require('dotenv').config()
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
 const port = process.env.PORT || 5000;
 // middleware
 app.use(express.json())
@@ -55,14 +56,15 @@ async function run() {
         const MenuCollection = client.db("bistroDb").collection('menu');
         const ReviewsCollection = client.db("bistroDb").collection('reviews');
         const cartCollection = client.db("bistroDb").collection('carts');
-        const verifyAdmin = async(req,res,next)=>{
-            const email =req.decoded
+        const paymentCollection = client.db("bistroDb").collection('payments');
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded
             console.log(email)
-            const query = {email: email}
+            const query = { email: email }
             const user = await usersCollection.findOne(query)
             const isAdmin = user?.role === 'Admin';
-            if(!isAdmin){
-               return res.status(403).send({message: 'Forbidden access'})
+            if (!isAdmin) {
+                return res.status(403).send({ message: 'Forbidden access' })
             }
             next()
         }
@@ -71,50 +73,50 @@ async function run() {
             const result = await MenuCollection.find().toArray()
             res.send(result)
         })
-        app.post('/menu' ,verifyToken,verifyAdmin,async(req,res)=>{
+        app.post('/menu', verifyToken, verifyAdmin, async (req, res) => {
             const item = req.body;
             const result = await MenuCollection.insertOne(item)
             res.send(result)
         })
-        
-        app.delete('/menu/:id',verifyToken, verifyAdmin,async(req,res)=>{
+
+        app.delete('/menu/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
-            const query ={_id: id}
+            const query = { _id: id }
             const result = await MenuCollection.deleteOne(query)
             res.send(result)
         })
-        app.patch('/menu/:id',verifyToken, verifyAdmin,async(req,res)=>{
+        app.patch('/menu/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
             const item = req.body
-            const query ={_id: id}
+            const query = { _id: id }
             const updatedDoc = {
-                $set:{
+                $set: {
                     name: item.name,
-                    image:item.image,
+                    image: item.image,
                     category: item.category,
                     recipe: item.recipe,
-                    price:parseFloat(item.price)
+                    price: parseFloat(item.price)
                 }
             }
-            const result = await MenuCollection.updateOne(query,updatedDoc)
+            const result = await MenuCollection.updateOne(query, updatedDoc)
             res.send(result)
         })
-    
-        app.get('/menu/:id',async(req,res)=>{
+
+        app.get('/menu/:id', async (req, res) => {
             const id = req.params.id;
-            const query ={_id: id}
+            const query = { _id: id }
             const result = await MenuCollection.findOne(query)
             res.send(result)
         })
-    
-        app.delete('/menu/:id',verifyToken, verifyAdmin,async(req,res)=>{
+
+        app.delete('/menu/:id', verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
-            const query ={_id: id}
+            const query = { _id: id }
             const result = await MenuCollection.deleteOne(query)
             res.send(result)
         })
-    
-        
+
+
         app.get('/reviews', async (req, res) => {
             const result = await ReviewsCollection.find().toArray()
             res.send(result)
@@ -141,18 +143,18 @@ async function run() {
             const result = await usersCollection.deleteOne(query)
             res.send(result)
         })
-        app.get('/users/admin/:email', verifyToken, async(req,res)=>{
+        app.get('/users/admin/:email', verifyToken, async (req, res) => {
             const email = req.params.email
-            if(email !== req.decoded){
-                return res.status(403).send({message: 'forbidden access'})
+            if (email !== req.decoded) {
+                return res.status(403).send({ message: 'forbidden access' })
             }
-            const query = {email: email}
+            const query = { email: email }
             const user = await usersCollection.findOne(query)
             let admin = false;
-            if(user){
+            if (user) {
                 admin = user?.role === 'Admin'
             }
-            res.send({admin})
+            res.send({ admin })
         })
         app.patch('/users/admin/:id', async (req, res) => {
             const id = req.params.id
@@ -165,7 +167,7 @@ async function run() {
             const result = await usersCollection.updateOne(filter, updatedDoc)
             res.send(result)
         })
-        app.get('/users', verifyToken,verifyAdmin, async (req, res) => {
+        app.get('/users', verifyToken, verifyAdmin, async (req, res) => {
             const result = await usersCollection.find().toArray()
             res.send(result)
         })
@@ -178,6 +180,32 @@ async function run() {
             }
             const result = await usersCollection.insertOne(user)
             res.send(result)
+        })
+
+        // Payment
+        app.post('/create-payment', async (req, res) => {
+            const { price } = req.body
+            const amount = parseInt(price * 100)
+            console.log('the price is ', amount)
+            const paymentIntent = await stripe.paymentIntents.create({
+                amount: amount,
+                currency: 'usd',
+                payment_method_types: ['card']
+            })
+            res.send({ clientSecret: paymentIntent.client_secret, })
+        })
+
+        app.post('/payments', async (req, res) => {
+            const paymentInfo = req.body
+            const paymentRes = await paymentCollection.insertOne(paymentInfo)
+            const query = {
+                _id: {
+                    $in: paymentInfo.menuIds.map(id => new ObjectId(id))
+                }
+            }
+            console.log(query)
+            const deletedRes = await cartCollection.deleteMany(query)
+            res.send({ paymentRes, deletedRes })
         })
 
         // Send a ping to confirm a successful connection
